@@ -1,0 +1,45 @@
+{
+  "version": "2.1.0",
+  "build": {
+    "typescript": "passed",
+    "viteProductionBuild": "passed",
+    "standaloneBuild": "passed",
+    "productionAuditVulnerabilities": 0,
+    "sourceLines": 6315
+  },
+  "standaloneSmoke": {
+    "loadedFromFileUrl": true,
+    "externalResources": 0,
+    "javascriptErrors": 0,
+    "menuState": "menu",
+    "weaponSlots": 6,
+    "canvas": [1600, 1000],
+    "playState": "playing",
+    "pointerLocked": true,
+    "initialWeapon": "VX-7",
+    "initialAmmo": "30/180"
+  },
+  "gameplaySystems": {
+    "supplyCratesCreated": 6,
+    "shootingConsumesAmmo": true,
+    "aimDownSights": true,
+    "lockedWeaponFeedback": true,
+    "guaranteedThirdKillDrops": ["MR-18 weapon module", "medkit"],
+    "medkitHealthTest": {"before": 30, "after": 65},
+    "supplyCrateAmmoTest": {
+      "before": {"magazine": 2, "reserve": 0},
+      "after": {"magazine": 42, "reserve": 46},
+      "cooldownSeconds": 20
+    },
+    "adaptiveResolutionMinimumScale": 0.72,
+    "queuedAutoEquip": {
+      "initial": {"pending": 1, "queued": 3, "current": "rifle"},
+      "final": {"pending": null, "queued": null, "current": "marksman", "ui": "MR-18"},
+      "passed": true
+    }
+  },
+  "notes": [
+    "Browser checks used Chromium with software WebGL, so measured FPS is not a hardware benchmark.",
+    "No JavaScript exceptions were observed in the final standalone smoke test."
+  ]
+}

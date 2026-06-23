@@ -1,0 +1,22 @@
+{
+  "name": "voxel-strike",
+  "private": true,
+  "version": "2.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "standalone": "node scripts/make-standalone.mjs",
+    "package": "npm run build && npm run standalone",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "three": "^0.184.0"
+  },
+  "description": "A procedural daylight-locked destructible voxel FPS with six weapons, dynamic loot, and reusable supply crates."
+}

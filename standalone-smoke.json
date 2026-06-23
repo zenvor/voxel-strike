@@ -1,0 +1,28 @@
+{
+  "menu": {
+    "navigate": {
+      "frameId": "4D138142A2F2ED4511A64540BE14D9B4",
+      "loaderId": "83338A299A963570F3681D1D73849C9C",
+      "isDownload": false
+    },
+    "title": "VOXEL STRIKE // 方块前线",
+    "url": "file:///mnt/data/voxel-strike-v2/voxel-strike/voxel-strike-standalone.html",
+    "state": "menu",
+    "loadingHidden": true,
+    "slots": 6,
+    "canvas": [
+      1600,
+      1000
+    ],
+    "devHook": false,
+    "externalResources": []
+  },
+  "game": {
+    "state": "playing",
+    "pointerLocked": true,
+    "weapon": "VX-7",
+    "ammo": "30/180",
+    "fps": "60 FPS"
+  },
+  "javascriptErrors": []
+}
