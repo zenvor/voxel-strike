@@ -1374,8 +1374,9 @@ button {
 
 .equipment-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 14px;
+  gap: 7px 10px;
   color: var(--muted);
   font-size: 8px;
 }
