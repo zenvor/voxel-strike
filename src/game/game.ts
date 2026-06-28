@@ -4,6 +4,7 @@ import { EffectsSystem } from './effects'
 import { Enemy } from './enemy'
 import { Environment } from './environment'
 import { Player } from './player'
+import { PlayerAvatar } from './playerAvatar'
 import {
   BLOCK_COLORS,
   BLOCK_DURABILITY,
@@ -24,6 +25,7 @@ import { WeaponSystem } from './weapon'
 type GameState = 'menu' | 'playing' | 'paused' | 'gameover' | 'victory'
 type WavePhase = 'delay' | 'spawning' | 'active' | 'complete'
 type PickupKind = 'health' | 'shield' | 'ammo' | 'build' | 'grenade' | 'weapon'
+type ViewMode = 'firstPerson' | 'thirdPerson'
 
 interface EnemyProjectile {
   mesh: THREE.Mesh
@@ -130,6 +132,15 @@ export class Game {
   private readonly ui: UIElements
   private readonly raycaster = new THREE.Raycaster()
   private readonly selection: THREE.LineSegments
+  private readonly playerAvatar = new PlayerAvatar(this.scene)
+  private readonly aimDirection = new THREE.Vector3()
+  private readonly actionOrigin = new THREE.Vector3()
+  private readonly thirdPersonTarget = new THREE.Vector3()
+  private readonly thirdPersonDesired = new THREE.Vector3()
+  private readonly thirdPersonLookAt = new THREE.Vector3()
+  private readonly thirdPersonRay = new THREE.Vector3()
+  private readonly thirdPersonRight = new THREE.Vector3()
+  private readonly thirdPersonMuzzle = new THREE.Vector3()
   private readonly beaconLights: THREE.PointLight[] = []
   private readonly projectiles: EnemyProjectile[] = []
   private readonly grenadesInWorld: Grenade[] = []
@@ -177,6 +188,7 @@ export class Game {
   private weaponDropPity = 0
   private ammoDropPity = 0
   private disposed = false
+  private viewMode: ViewMode = 'firstPerson'
   private lastFrameTime = performance.now()
 
   constructor(canvas: HTMLCanvasElement, initialSettings: Partial<GameSettings> = {}) {
@@ -269,15 +281,16 @@ export class Game {
     this.blockDamage.clear()
     this.announce('白昼协议启动', `世界种子 ${this.settings.seed} · ${this.difficulty.label}难度`)
     this.addFeed('任务：存活五轮敌袭 · 搜集战利品与武器', 'system')
+    this.addFeed('新增协议：V 切换视角 · F 战术冲刺', 'system')
     this.setState('playing')
-    this.canvas.requestPointerLock()
+    this.requestPointerLock()
     this.updateHUD(0, true)
   }
 
   resume(): void {
     if (this.state !== 'paused') return
     this.audio.resume().catch(() => undefined)
-    this.canvas.requestPointerLock()
+    this.requestPointerLock()
   }
 
   restart(): void {
@@ -288,6 +301,7 @@ export class Game {
     if (document.pointerLockElement === this.canvas) document.exitPointerLock()
     this.clearRunObjects()
     this.weapon.root.visible = false
+    this.playerAvatar.setVisible(false)
     this.selection.visible = false
     this.setState('menu')
   }
@@ -593,6 +607,8 @@ export class Game {
       else if (event.code === 'KeyG') this.throwGrenade()
       else if (event.code === 'KeyQ') this.placeBlock()
       else if (event.code === 'KeyE') this.useNearestSupplyCrate()
+      else if (event.code === 'KeyV') this.toggleViewMode()
+      else if (event.code === 'KeyF') this.dashPlayer()
     })
     window.addEventListener('keyup', (event) => {
       if (this.player) this.player.setKey(event.code, false)
@@ -677,8 +693,11 @@ export class Game {
       return
     }
 
+    this.syncViewVisibility()
+    if (this.viewMode === 'thirdPerson') this.applyThirdPersonCamera(dt, movement.sprinting)
     this.weapon.update(dt, movement.speed, movement.sprinting)
     this.player.aiming = this.weapon.getAimAmount() > 0.12
+    this.updateView(dt, movement.speed, movement.sprinting)
     if (movement.landed) this.audio.step(1.3)
     if (this.player.onGround && movement.speed > 1.2) {
       this.footstepDistance += movement.speed * dt
@@ -708,10 +727,106 @@ export class Game {
     this.updateHUD(dt)
   }
 
+  private toggleViewMode(): void {
+    this.viewMode = this.viewMode === 'firstPerson' ? 'thirdPerson' : 'firstPerson'
+    this.syncViewVisibility()
+    this.addFeed(this.viewMode === 'thirdPerson' ? '第三人称肩射视角已启用' : '第一人称视角已启用', 'system')
+    this.audio.ui(this.viewMode === 'thirdPerson' ? 540 : 420)
+  }
+
+  private dashPlayer(): void {
+    if (this.player.dash()) {
+      this.crosshairKick = Math.max(this.crosshairKick, 7)
+      this.audio.ui(680)
+      const burstOrigin = this.player.position.clone().add(new THREE.Vector3(0, -0.65, 0))
+      this.effects.burst(burstOrigin, { count: 12, color: 0x75edff, speed: 3.2, life: 0.35, size: 0.055, gravity: 0, drag: 3 })
+      return
+    }
+    if (this.player.dashCooldown > 0) this.addFeed(`冲刺冷却中：${this.player.dashCooldown.toFixed(1)} 秒`, 'warning')
+    else this.addFeed('体力不足，无法战术冲刺', 'warning')
+    this.audio.dryFire()
+  }
+
+  private updateView(dt: number, speed: number, sprinting: boolean): void {
+    this.syncViewVisibility()
+    if (this.viewMode === 'thirdPerson') this.applyThirdPersonCamera(dt, sprinting)
+    this.playerAvatar.update(this.player.position, this.player.yaw, this.player.pitch, dt, speed, sprinting, this.weapon.getDefinition())
+  }
+
+  private applyThirdPersonCamera(dt: number, sprinting: boolean): void {
+    this.getPlayerLookDirection(this.aimDirection)
+    this.thirdPersonRight.set(Math.cos(this.player.yaw), 0, -Math.sin(this.player.yaw)).normalize()
+    const distance = this.weapon.getAimAmount() > 0.45 ? 3.8 : 5.05
+    const shoulder = this.weapon.getAimAmount() > 0.45 ? 1.05 : 1.55
+    this.thirdPersonTarget.copy(this.player.position).addScaledVector(this.aimDirection, 0.55)
+    this.thirdPersonDesired.copy(this.thirdPersonTarget)
+      .addScaledVector(this.aimDirection, -distance)
+      .addScaledVector(this.thirdPersonRight, shoulder)
+    this.thirdPersonDesired.y += 0.62
+
+    this.thirdPersonRay.copy(this.thirdPersonDesired).sub(this.thirdPersonTarget)
+    const rayDistance = this.thirdPersonRay.length()
+    if (rayDistance > 0.001) {
+      this.thirdPersonRay.normalize()
+      const hit = this.world.raycast(this.thirdPersonTarget, this.thirdPersonRay, rayDistance)
+      if (hit) {
+        const safeDistance = Math.max(0.72, hit.distance - 0.22)
+        this.thirdPersonDesired.copy(this.thirdPersonTarget).addScaledVector(this.thirdPersonRay, safeDistance)
+      }
+    }
+
+    this.camera.position.copy(this.thirdPersonDesired)
+    this.thirdPersonLookAt.copy(this.thirdPersonTarget).addScaledVector(this.aimDirection, 14)
+    this.camera.lookAt(this.thirdPersonLookAt)
+    const targetFov = this.weapon.getAimAmount() > 0.45 ? 62 : sprinting ? 76 : 70
+    const nextFov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 1 - Math.exp(-8 * dt))
+    if (Math.abs(nextFov - this.camera.fov) > 0.01) {
+      this.camera.fov = nextFov
+      this.camera.updateProjectionMatrix()
+    }
+  }
+
+  private getActionOrigin(target = this.actionOrigin): THREE.Vector3 {
+    if (this.viewMode === 'thirdPerson') return target.copy(this.player.position)
+    return target.copy(this.camera.position)
+  }
+
+  private getAimDirection(target = this.aimDirection): THREE.Vector3 {
+    if (this.viewMode === 'thirdPerson') return this.getPlayerLookDirection(target)
+    return this.camera.getWorldDirection(target).normalize()
+  }
+
+  private getPlayerLookDirection(target = this.aimDirection): THREE.Vector3 {
+    const cosPitch = Math.cos(this.player.pitch)
+    target.set(
+      -Math.sin(this.player.yaw) * cosPitch,
+      Math.sin(this.player.pitch),
+      -Math.cos(this.player.yaw) * cosPitch,
+    )
+    return target.normalize()
+  }
+
+  private getMuzzlePosition(fallback: THREE.Vector3): THREE.Vector3 {
+    if (this.viewMode === 'firstPerson') return fallback
+    return this.playerAvatar.muzzle.getWorldPosition(this.thirdPersonMuzzle)
+  }
+
+  private syncViewVisibility(): void {
+    const inRun = this.state === 'playing' || this.state === 'paused'
+    this.weapon.root.visible = inRun && this.viewMode === 'firstPerson'
+    this.playerAvatar.setVisible(inRun && this.viewMode === 'thirdPerson')
+  }
+
+  private requestPointerLock(): void {
+    const request = this.canvas.requestPointerLock() as Promise<void> | void
+    if (request && typeof request.catch === 'function') void request.catch(() => undefined)
+  }
+
   private fireWeapon(definition: WeaponDefinition, muzzlePosition: THREE.Vector3): void {
     if (this.state !== 'playing') return
-    const origin = this.camera.position.clone()
-    const forward = this.player.getForward(new THREE.Vector3())
+    const origin = this.getActionOrigin(new THREE.Vector3())
+    const forward = this.getAimDirection(new THREE.Vector3())
+    const visualMuzzle = this.getMuzzlePosition(muzzlePosition)
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion)
     const targetMeshes = this.enemies.filter((enemy) => enemy.alive).flatMap((enemy) => enemy.hitMeshes)
@@ -720,7 +835,7 @@ export class Game {
     const effectiveSpread = definition.spread * this.weapon.getSpreadMultiplier() * movementSpread
 
     if (definition.id !== 'railgun') {
-      const casingOrigin = muzzlePosition.clone().addScaledVector(right, 0.08).addScaledVector(up, 0.03)
+      const casingOrigin = visualMuzzle.clone().addScaledVector(right, 0.08).addScaledVector(up, 0.03)
       this.effects.burst(casingOrigin, {
         count: definition.id === 'shotgun' ? 2 : 1,
         color: 0xd3a64e,
@@ -789,7 +904,7 @@ export class Game {
 
       const tracerRadius = definition.id === 'railgun' ? 0.034 : definition.id === 'lmg' ? 0.016 : definition.id === 'marksman' ? 0.018 : 0.012
       const tracerLife = definition.id === 'railgun' ? 0.15 : definition.id === 'marksman' ? 0.085 : 0.065
-      this.effects.tracer(muzzlePosition, endPoint, definition.tracerColor, tracerRadius, tracerLife)
+      this.effects.tracer(visualMuzzle, endPoint, definition.tracerColor, tracerRadius, tracerLife)
     }
     const kick = definition.id === 'shotgun' ? 16 : definition.id === 'railgun' ? 12 : definition.id === 'lmg' ? 8 : definition.id === 'smg' ? 5 : 6
     this.crosshairKick = Math.max(this.crosshairKick, kick * THREE.MathUtils.lerp(1, 0.62, this.weapon.getAimAmount()))
@@ -833,8 +948,8 @@ export class Game {
       this.audio.dryFire()
       return
     }
-    const direction = this.player.getForward(new THREE.Vector3())
-    const hit = this.world.raycast(this.camera.position, direction, 6.5)
+    const direction = this.getAimDirection(new THREE.Vector3())
+    const hit = this.world.raycast(this.getActionOrigin(new THREE.Vector3()), direction, 6.5)
     if (!hit || hit.normal.lengthSq() === 0 || hit.type === BlockType.Bedrock) return
     const x = hit.x + Math.round(hit.normal.x)
     const y = hit.y + Math.round(hit.normal.y)
@@ -875,8 +990,8 @@ export class Game {
     const band = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 6, 12), glowMaterial)
     band.rotation.x = Math.PI / 2
     group.add(shell, band)
-    const forward = this.player.getForward(new THREE.Vector3())
-    group.position.copy(this.camera.position).addScaledVector(forward, 0.55)
+    const forward = this.getAimDirection(new THREE.Vector3())
+    group.position.copy(this.getActionOrigin(new THREE.Vector3())).addScaledVector(forward, 0.55)
     this.scene.add(group)
     this.grenadesInWorld.push({
       group,
@@ -1401,8 +1516,8 @@ export class Game {
     }
 
     this.ui.interactHint.classList.remove('supply', 'cooldown')
-    const direction = this.player.getForward(new THREE.Vector3())
-    const hit = this.world.raycast(this.camera.position, direction, 6.5)
+    const direction = this.getAimDirection(new THREE.Vector3())
+    const hit = this.world.raycast(this.getActionOrigin(new THREE.Vector3()), direction, 6.5)
     if (!hit || hit.type === BlockType.Bedrock) {
       this.selection.visible = false
       this.ui.interactHint.classList.remove('visible')

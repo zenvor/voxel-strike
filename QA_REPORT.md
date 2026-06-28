@@ -1,5 +1,23 @@
 # VOXEL STRIKE 2.1 验证报告
 
+## 未发布玩法更新验证
+
+本次已完成以下检查：
+
+- `npm run build`：TypeScript 类型检查与 Vite 生产构建通过。
+- `npm run package`：生产构建与 `voxel-strike-standalone.html` 单文件生成通过。
+- 本地 Vite 页面 `http://127.0.0.1:5173/` 菜单加载成功，菜单中显示“第三人称肩射”和“战术机动”。
+- 点击进入战区后进入 `playing` 状态，HUD 正常显示。
+- 按 `V` 后事件反馈显示“第三人称肩射视角已启用”，第三人称角色模型、准星、HUD 与雷达正常可见。
+- 修复第三人称相机从第一人称眼位反复插值造成的前后抖动后，重新截图采样确认角色和相机位置稳定。
+- 按 `F` 后体力条从 `100%` 降至约 `78%`，仍保持 `playing` 状态。
+- 修复并复测自动化环境下 Pointer Lock 拒绝导致的控制台 error；复测后本地页面未发现新的 error/warn。
+- `voxel-strike-standalone.html` 已生成，静态检查未发现 `src`/`href` 指向外部 HTTP/HTTPS 资源。
+
+未完成项：
+
+- 内置浏览器安全策略阻止打开 `file://` 本地路径，因此本次未能在浏览器中直接验证单文件 `file://` 运行。
+
 最终版本已完成以下自动化与实机检查：
 
 - TypeScript 类型检查与 Vite 生产构建通过。

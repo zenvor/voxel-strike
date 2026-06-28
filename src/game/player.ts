@@ -22,6 +22,7 @@ export class Player {
   maxShield = 50
   lastDamageAt = -100
   alive = true
+  dashCooldown = 0
 
   private readonly keys = new Set<string>()
   private bobTime = 0
@@ -47,6 +48,7 @@ export class Player {
     this.stamina = 100
     this.alive = true
     this.aiming = false
+    this.dashCooldown = 0
     this.lastDamageAt = -100
     this.elapsed = 0
     this.bobTime = 0
@@ -68,8 +70,30 @@ export class Player {
     this.pitch = THREE.MathUtils.clamp(this.pitch, -Math.PI * 0.485, Math.PI * 0.485)
   }
 
+  dash(): boolean {
+    if (!this.alive || this.dashCooldown > 0 || this.stamina < 26) return false
+    const forwardInput = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0)
+    const strafeInput = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0)
+    const inputLength = Math.hypot(forwardInput, strafeInput)
+    const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw))
+    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw))
+    const direction = new THREE.Vector3()
+    if (inputLength > 0) {
+      direction.addScaledVector(forward, forwardInput / inputLength)
+      direction.addScaledVector(right, strafeInput / inputLength)
+    } else direction.copy(forward)
+
+    this.velocity.x += direction.x * 9.8
+    this.velocity.z += direction.z * 9.8
+    if (!this.onGround) this.velocity.y = Math.max(this.velocity.y, 1.1)
+    this.stamina -= 26
+    this.dashCooldown = 0.95
+    return true
+  }
+
   update(dt: number): { speed: number; sprinting: boolean; landed: boolean } {
     this.elapsed += dt
+    this.dashCooldown = Math.max(0, this.dashCooldown - dt)
     const forwardInput = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0)
     const strafeInput = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0)
     const inputLength = Math.hypot(forwardInput, strafeInput)

@@ -64,8 +64,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <div class="feature-rail">
             <span><i>01</i>程序化战区</span>
             <span><i>02</i>实时破坏</span>
-            <span><i>03</i>战术 AI</span>
-            <span><i>04</i>动态战利品</span>
+            <span><i>03</i>第三人称肩射</span>
+            <span><i>04</i>战术机动</span>
           </div>
 
           <div class="start-card tactical-card">
@@ -132,9 +132,11 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             <div class="control-grid">
               <span><kbd>WASD</kbd><b>移动</b></span>
               <span><kbd>SHIFT</kbd><b>冲刺</b></span>
+              <span><kbd>F</kbd><b>战术冲刺</b></span>
               <span><kbd>SPACE</kbd><b>跳跃</b></span>
               <span><kbd>鼠标左键</kbd><b>射击</b></span>
               <span><kbd>鼠标右键</kbd><b>精确瞄准</b></span>
+              <span><kbd>V</kbd><b>切换视角</b></span>
               <span><kbd>Q</kbd><b>部署方块</b></span>
               <span><kbd>E</kbd><b>使用补给箱</b></span>
               <span><kbd>G</kbd><b>电浆手雷</b></span>
@@ -202,6 +204,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div class="equipment-row">
         <span><kbd>G</kbd> 手雷 <b id="grenade-count">3</b></span>
         <span><kbd>Q</kbd> 方块 <b id="build-count">28</b></span>
+        <span><kbd>F</kbd> 冲刺</span>
+        <span><kbd>V</kbd> 视角</span>
         <span><kbd>E</kbd> 补给</span>
       </div>
     </div>
